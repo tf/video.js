@@ -40129,15 +40129,21 @@ var comparePlaylistResolution = function comparePlaylistResolution(left, right) 
 /**
  * Chooses the appropriate media playlist based on bandwidth and player size
  *
- * @param {Object} master
+ * @param {Object} settings
+ *        Object of information required to use this selector
+ * @param {Object} settings.master
  *        Object representation of the master manifest
- * @param {number} playerBandwidth
+ * @param {number} settings.bandwidth
  *        Current calculated bandwidth of the player
- * @param {number} playerWidth
+ * @param {number} settings.playerWidth
  *        Current width of the player element (should account for the device pixel ratio)
- * @param {number} playerHeight
+ * @param {number} settings.playerHeight
  *        Current height of the player element (should account for the device pixel ratio)
- * @param {boolean} limitRenditionByPlayerDimensions
+ * @param {number} settings.playerObjectFit
+ *        Current value of the video element's object-fit CSS property. Allows taking into
+ *        account that the video might be scaled up to cover the media element when selecting
+ *        media playlists based on player size.
+ * @param {boolean} settings.limitRenditionByPlayerDimensions
  *        True if the player width and height should be used during the selection, false otherwise
  * @return {Playlist} the highest bitrate playlist less than the
  * currently detected bandwidth, accounting for some amount of
@@ -40145,8 +40151,14 @@ var comparePlaylistResolution = function comparePlaylistResolution(left, right) 
  */
 
 
-var simpleSelector = function simpleSelector(master, playerBandwidth, playerWidth, playerHeight, limitRenditionByPlayerDimensions) {
-  // If we end up getting called before `master` is available, exit early
+var simpleSelector = function simpleSelector(settings) {
+  var master = settings.master,
+      playerBandwidth = settings.bandwidth,
+      playerWidth = settings.playerWidth,
+      playerHeight = settings.playerHeight,
+      playerObjectFit = settings.playerObjectFit,
+      limitRenditionByPlayerDimensions = settings.limitRenditionByPlayerDimensions; // If we end up getting called before `master` is available, exit early
+
   if (!master) {
     return;
   }
@@ -40252,6 +40264,15 @@ var simpleSelector = function simpleSelector(master, playerBandwidth, playerWidt
 
   if (!resolutionBestRep) {
     resolutionPlusOneList = haveResolution.filter(function (rep) {
+      if (playerObjectFit === 'cover') {
+        // video will be scaled up to cover the player. We need to
+        // make sure rendition is at least as wide and as high as the
+        // player.
+        return rep.width > playerWidth && rep.height > playerHeight;
+      } // video will be scaled down to fit inside the player soon as
+      // its resolution exceeds player size in at least one dimension.
+
+
       return rep.width > playerWidth || rep.height > playerHeight;
     }); // find all the variants have the same smallest resolution
 
@@ -40304,7 +40325,14 @@ var simpleSelector = function simpleSelector(master, playerBandwidth, playerWidt
 
 var lastBandwidthSelector = function lastBandwidthSelector() {
   var pixelRatio = this.useDevicePixelRatio ? window$1.devicePixelRatio || 1 : 1;
-  return simpleSelector(this.playlists.master, this.systemBandwidth, parseInt(safeGetComputedStyle(this.tech_.el(), 'width'), 10) * pixelRatio, parseInt(safeGetComputedStyle(this.tech_.el(), 'height'), 10) * pixelRatio, this.limitRenditionByPlayerDimensions);
+  return simpleSelector({
+    master: this.playlists.master,
+    bandwidth: this.systemBandwidth,
+    playerWidth: parseInt(safeGetComputedStyle(this.tech_.el(), 'width'), 10) * pixelRatio,
+    playerHeight: parseInt(safeGetComputedStyle(this.tech_.el(), 'height'), 10) * pixelRatio,
+    playerObjectFit: safeGetComputedStyle(this.tech_.el(), 'objectFit'),
+    limitRenditionByPlayerDimensions: this.limitRenditionByPlayerDimensions
+  });
 };
 /**
  * Chooses the appropriate media playlist based on an
@@ -40337,7 +40365,14 @@ var movingAverageBandwidthSelector = function movingAverageBandwidthSelector(dec
     }
 
     average = decay * this.systemBandwidth + (1 - decay) * average;
-    return simpleSelector(this.playlists.master, average, parseInt(safeGetComputedStyle(this.tech_.el(), 'width'), 10) * pixelRatio, parseInt(safeGetComputedStyle(this.tech_.el(), 'height'), 10) * pixelRatio, this.limitRenditionByPlayerDimensions);
+    return simpleSelector({
+      master: this.playlists.master,
+      bandwidth: average,
+      playerWidth: parseInt(safeGetComputedStyle(this.tech_.el(), 'width'), 10) * pixelRatio,
+      playerHeight: parseInt(safeGetComputedStyle(this.tech_.el(), 'height'), 10) * pixelRatio,
+      playerObjectFit: safeGetComputedStyle(this.tech_.el(), 'objectFit'),
+      limitRenditionByPlayerDimensions: this.limitRenditionByPlayerDimensions
+    });
   };
 };
 /**

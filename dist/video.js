@@ -8785,63 +8785,7 @@
   NORMAL.names = Object.keys(NORMAL);
   ALL.names = [].concat(REMOTE.names).concat(NORMAL.names);
 
-  /**
-   * Copyright 2013 vtt.js Contributors
-   *
-   * Licensed under the Apache License, Version 2.0 (the "License");
-   * you may not use this file except in compliance with the License.
-   * You may obtain a copy of the License at
-   *
-   *   http://www.apache.org/licenses/LICENSE-2.0
-   *
-   * Unless required by applicable law or agreed to in writing, software
-   * distributed under the License is distributed on an "AS IS" BASIS,
-   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   * See the License for the specific language governing permissions and
-   * limitations under the License.
-   */
-
-  /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-
-  /* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
-
-  var _objCreate = Object.create || function () {
-    function F() {}
-
-    return function (o) {
-      if (arguments.length !== 1) {
-        throw new Error('Object.create shim only accepts one parameter.');
-      }
-
-      F.prototype = o;
-      return new F();
-    };
-  }(); // Creates a new ParserError object from an errorData object. The errorData
-  // object should have default code and message properties. The default message
-  // property can be overriden by passing in a message parameter.
-  // See ParsingError.Errors below for acceptable errors.
-
-
-  function ParsingError(errorData, message) {
-    this.name = "ParsingError";
-    this.code = errorData.code;
-    this.message = message || errorData.message;
-  }
-
-  ParsingError.prototype = _objCreate(Error.prototype);
-  ParsingError.prototype.constructor = ParsingError; // ParsingError metadata for acceptable ParsingErrors.
-
-  ParsingError.Errors = {
-    BadSignature: {
-      code: 0,
-      message: "Malformed WebVTT signature."
-    },
-    BadTimeStamp: {
-      code: 1,
-      message: "Malformed time stamp."
-    }
-  }; // Try to parse input as a time stamp.
-
+  // Try to parse input as a time stamp.
   function parseTimeStamp(input) {
     function computeSeconds(h, m, s, f) {
       return (h | 0) * 3600 + (m | 0) * 60 + (s | 0) + (f | 0) / 1000;
@@ -8864,225 +8808,16 @@
       // Timestamp takes the form of [minutes]:[seconds].[milliseconds]
       return computeSeconds(0, m[1], m[2], m[4]);
     }
-  } // A settings object holds key/value pairs and will ignore anything but the first
-  // assignment to a specific key.
-
-
-  function Settings() {
-    this.values = _objCreate(null);
   }
 
-  Settings.prototype = {
-    // Only accept the first assignment to any key.
-    set: function set(k, v) {
-      if (!this.get(k) && v !== "") {
-        this.values[k] = v;
-      }
-    },
-    // Return the value for a key, or a default value.
-    // If 'defaultKey' is passed then 'dflt' is assumed to be an object with
-    // a number of possible default values as properties where 'defaultKey' is
-    // the key of the property that will be chosen; otherwise it's assumed to be
-    // a single value.
-    get: function get(k, dflt, defaultKey) {
-      if (defaultKey) {
-        return this.has(k) ? this.values[k] : dflt[defaultKey];
-      }
+  var parseTimestamp = parseTimeStamp;
 
-      return this.has(k) ? this.values[k] : dflt;
-    },
-    // Check whether we have a value for a key.
-    has: function has(k) {
-      return k in this.values;
-    },
-    // Accept a setting if its one of the given alternatives.
-    alt: function alt(k, v, a) {
-      for (var n = 0; n < a.length; ++n) {
-        if (v === a[n]) {
-          this.set(k, v);
-          break;
-        }
-      }
-    },
-    // Accept a setting if its a valid (signed) integer.
-    integer: function integer(k, v) {
-      if (/^-?\d+$/.test(v)) {
-        // integer
-        this.set(k, parseInt(v, 10));
-      }
-    },
-    // Accept a setting if its a valid percentage.
-    percent: function percent(k, v) {
-      var m;
+  // side rendering, `document` is an empty object.
 
-      if (m = v.match(/^([\d]{1,3})(\.[\d]*)?%$/)) {
-        v = parseFloat(v);
-
-        if (v >= 0 && v <= 100) {
-          this.set(k, v);
-          return true;
-        }
-      }
-
-      return false;
-    }
-  }; // Helper function to parse input into groups separated by 'groupDelim', and
-  // interprete each group as a key/value pair separated by 'keyValueDelim'.
-
-  function parseOptions(input, callback, keyValueDelim, groupDelim) {
-    var groups = groupDelim ? input.split(groupDelim) : [input];
-
-    for (var i in groups) {
-      if (typeof groups[i] !== "string") {
-        continue;
-      }
-
-      var kv = groups[i].split(keyValueDelim);
-
-      if (kv.length !== 2) {
-        continue;
-      }
-
-      var k = kv[0];
-      var v = kv[1];
-      callback(k, v);
-    }
-  }
-
-  function parseCue(input, cue, regionList) {
-    // Remember the original input if we need to throw an error.
-    var oInput = input; // 4.1 WebVTT timestamp
-
-    function consumeTimeStamp() {
-      var ts = parseTimeStamp(input);
-
-      if (ts === null) {
-        throw new ParsingError(ParsingError.Errors.BadTimeStamp, "Malformed timestamp: " + oInput);
-      } // Remove time stamp from input.
-
-
-      input = input.replace(/^[^\sa-zA-Z-]+/, "");
-      return ts;
-    } // 4.4.2 WebVTT cue settings
-
-
-    function consumeCueSettings(input, cue) {
-      var settings = new Settings();
-      parseOptions(input, function (k, v) {
-        switch (k) {
-          case "region":
-            // Find the last region we parsed with the same region id.
-            for (var i = regionList.length - 1; i >= 0; i--) {
-              if (regionList[i].id === v) {
-                settings.set(k, regionList[i].region);
-                break;
-              }
-            }
-
-            break;
-
-          case "vertical":
-            settings.alt(k, v, ["rl", "lr"]);
-            break;
-
-          case "line":
-            var vals = v.split(","),
-                vals0 = vals[0];
-            settings.integer(k, vals0);
-            settings.percent(k, vals0) ? settings.set("snapToLines", false) : null;
-            settings.alt(k, vals0, ["auto"]);
-
-            if (vals.length === 2) {
-              settings.alt("lineAlign", vals[1], ["start", "center", "end"]);
-            }
-
-            break;
-
-          case "position":
-            vals = v.split(",");
-            settings.percent(k, vals[0]);
-
-            if (vals.length === 2) {
-              settings.alt("positionAlign", vals[1], ["start", "center", "end"]);
-            }
-
-            break;
-
-          case "size":
-            settings.percent(k, v);
-            break;
-
-          case "align":
-            settings.alt(k, v, ["start", "center", "end", "left", "right"]);
-            break;
-        }
-      }, /:/, /\s/); // Apply default values for any missing fields.
-
-      cue.region = settings.get("region", null);
-      cue.vertical = settings.get("vertical", "");
-
-      try {
-        cue.line = settings.get("line", "auto");
-      } catch (e) {}
-
-      cue.lineAlign = settings.get("lineAlign", "start");
-      cue.snapToLines = settings.get("snapToLines", true);
-      cue.size = settings.get("size", 100); // Safari still uses the old middle value and won't accept center
-
-      try {
-        cue.align = settings.get("align", "center");
-      } catch (e) {
-        cue.align = settings.get("align", "middle");
-      }
-
-      try {
-        cue.position = settings.get("position", "auto");
-      } catch (e) {
-        cue.position = settings.get("position", {
-          start: 0,
-          left: 0,
-          center: 50,
-          middle: 50,
-          end: 100,
-          right: 100
-        }, cue.align);
-      }
-
-      cue.positionAlign = settings.get("positionAlign", {
-        start: "start",
-        left: "start",
-        center: "center",
-        middle: "center",
-        end: "end",
-        right: "end"
-      }, cue.align);
-    }
-
-    function skipWhitespace() {
-      input = input.replace(/^\s+/, "");
-    } // 4.1 WebVTT cue timings.
-
-
-    skipWhitespace();
-    cue.startTime = consumeTimeStamp(); // (1) collect cue start time
-
-    skipWhitespace();
-
-    if (input.substr(0, 3) !== "-->") {
-      // (3) next characters must match "-->"
-      throw new ParsingError(ParsingError.Errors.BadTimeStamp, "Malformed time stamp (time stamps must be separated by '-->'): " + oInput);
-    }
-
-    input = input.substr(3);
-    skipWhitespace();
-    cue.endTime = consumeTimeStamp(); // (5) collect cue end time
-    // 4.1 WebVTT cue settings list.
-
-    skipWhitespace();
-    consumeCueSettings(input, cue);
-  }
-
-  var TEXTAREA_ELEMENT = document_1.createElement("textarea");
+  var TEXTAREA_ELEMENT = document_1.createElement && document_1.createElement("textarea");
+  var NEEDS_PARENT = {
+    rt: "ruby"
+  };
   var TAG_NAME = {
     c: "span",
     i: "i",
@@ -9092,6 +8827,10 @@
     rt: "rt",
     v: "span",
     lang: "span"
+  };
+  var TAG_ANNOTATION = {
+    v: "title",
+    lang: "lang"
   }; // 5.1 default text color
   // 5.2 default text background color is equivalent to text color with bg_ prefix
 
@@ -9104,13 +8843,6 @@
     magenta: 'rgba(255,0,255,1)',
     blue: 'rgba(0,0,255,1)',
     black: 'rgba(0,0,0,1)'
-  };
-  var TAG_ANNOTATION = {
-    v: "title",
-    lang: "lang"
-  };
-  var NEEDS_PARENT = {
-    rt: "ruby"
   }; // Parse content into a document fragment.
 
   function parseContent(window, input) {
@@ -9179,7 +8911,7 @@
           continue;
         }
 
-        var ts = parseTimeStamp(t.substr(1, t.length - 2));
+        var ts = parseTimestamp(t.substr(1, t.length - 2));
         var node;
 
         if (ts) {
@@ -9216,7 +8948,7 @@
 
             var colorName = bgColor ? cl.slice(3) : cl;
 
-            if (DEFAULT_COLOR_CLASS.hasOwnProperty(colorName)) {
+            if (Object.prototype.hasOwnProperty.call(DEFAULT_COLOR_CLASS, colorName)) {
               var propName = bgColor ? 'background-color' : 'color';
               var propValue = DEFAULT_COLOR_CLASS[colorName];
               node.style[propName] = propValue;
@@ -9238,217 +8970,23 @@
     }
 
     return rootDiv;
-  } // This is a list of all the Unicode characters that have a strong
-  // right-to-left category. What this means is that these characters are
-  // written right-to-left for sure. It was generated by pulling all the strong
-  // right-to-left characters out of the Unicode data table. That table can
-  // found at: http://www.unicode.org/Public/UNIDATA/UnicodeData.txt
-
-
-  var strongRTLRanges = [[0x5be, 0x5be], [0x5c0, 0x5c0], [0x5c3, 0x5c3], [0x5c6, 0x5c6], [0x5d0, 0x5ea], [0x5f0, 0x5f4], [0x608, 0x608], [0x60b, 0x60b], [0x60d, 0x60d], [0x61b, 0x61b], [0x61e, 0x64a], [0x66d, 0x66f], [0x671, 0x6d5], [0x6e5, 0x6e6], [0x6ee, 0x6ef], [0x6fa, 0x70d], [0x70f, 0x710], [0x712, 0x72f], [0x74d, 0x7a5], [0x7b1, 0x7b1], [0x7c0, 0x7ea], [0x7f4, 0x7f5], [0x7fa, 0x7fa], [0x800, 0x815], [0x81a, 0x81a], [0x824, 0x824], [0x828, 0x828], [0x830, 0x83e], [0x840, 0x858], [0x85e, 0x85e], [0x8a0, 0x8a0], [0x8a2, 0x8ac], [0x200f, 0x200f], [0xfb1d, 0xfb1d], [0xfb1f, 0xfb28], [0xfb2a, 0xfb36], [0xfb38, 0xfb3c], [0xfb3e, 0xfb3e], [0xfb40, 0xfb41], [0xfb43, 0xfb44], [0xfb46, 0xfbc1], [0xfbd3, 0xfd3d], [0xfd50, 0xfd8f], [0xfd92, 0xfdc7], [0xfdf0, 0xfdfc], [0xfe70, 0xfe74], [0xfe76, 0xfefc], [0x10800, 0x10805], [0x10808, 0x10808], [0x1080a, 0x10835], [0x10837, 0x10838], [0x1083c, 0x1083c], [0x1083f, 0x10855], [0x10857, 0x1085f], [0x10900, 0x1091b], [0x10920, 0x10939], [0x1093f, 0x1093f], [0x10980, 0x109b7], [0x109be, 0x109bf], [0x10a00, 0x10a00], [0x10a10, 0x10a13], [0x10a15, 0x10a17], [0x10a19, 0x10a33], [0x10a40, 0x10a47], [0x10a50, 0x10a58], [0x10a60, 0x10a7f], [0x10b00, 0x10b35], [0x10b40, 0x10b55], [0x10b58, 0x10b72], [0x10b78, 0x10b7f], [0x10c00, 0x10c48], [0x1ee00, 0x1ee03], [0x1ee05, 0x1ee1f], [0x1ee21, 0x1ee22], [0x1ee24, 0x1ee24], [0x1ee27, 0x1ee27], [0x1ee29, 0x1ee32], [0x1ee34, 0x1ee37], [0x1ee39, 0x1ee39], [0x1ee3b, 0x1ee3b], [0x1ee42, 0x1ee42], [0x1ee47, 0x1ee47], [0x1ee49, 0x1ee49], [0x1ee4b, 0x1ee4b], [0x1ee4d, 0x1ee4f], [0x1ee51, 0x1ee52], [0x1ee54, 0x1ee54], [0x1ee57, 0x1ee57], [0x1ee59, 0x1ee59], [0x1ee5b, 0x1ee5b], [0x1ee5d, 0x1ee5d], [0x1ee5f, 0x1ee5f], [0x1ee61, 0x1ee62], [0x1ee64, 0x1ee64], [0x1ee67, 0x1ee6a], [0x1ee6c, 0x1ee72], [0x1ee74, 0x1ee77], [0x1ee79, 0x1ee7c], [0x1ee7e, 0x1ee7e], [0x1ee80, 0x1ee89], [0x1ee8b, 0x1ee9b], [0x1eea1, 0x1eea3], [0x1eea5, 0x1eea9], [0x1eeab, 0x1eebb], [0x10fffd, 0x10fffd]];
-
-  function isStrongRTLChar(charCode) {
-    for (var i = 0; i < strongRTLRanges.length; i++) {
-      var currentRange = strongRTLRanges[i];
-
-      if (charCode >= currentRange[0] && charCode <= currentRange[1]) {
-        return true;
-      }
-    }
-
-    return false;
   }
 
-  function determineBidi(cueDiv) {
-    var nodeStack = [],
-        text = "",
-        charCode;
+  var parseContent_1 = parseContent;
 
-    if (!cueDiv || !cueDiv.childNodes) {
-      return "ltr";
+  var convertCueToDOMTree = function convertCueToDOMTree(window, cuetext) {
+    if (!window || !cuetext) {
+      return null;
     }
 
-    function pushNodes(nodeStack, node) {
-      for (var i = node.childNodes.length - 1; i >= 0; i--) {
-        nodeStack.push(node.childNodes[i]);
-      }
-    }
-
-    function nextTextNode(nodeStack) {
-      if (!nodeStack || !nodeStack.length) {
-        return null;
-      }
-
-      var node = nodeStack.pop(),
-          text = node.textContent || node.innerText;
-
-      if (text) {
-        // TODO: This should match all unicode type B characters (paragraph
-        // separator characters). See issue #115.
-        var m = text.match(/^.*(\n|\r)/);
-
-        if (m) {
-          nodeStack.length = 0;
-          return m[0];
-        }
-
-        return text;
-      }
-
-      if (node.tagName === "ruby") {
-        return nextTextNode(nodeStack);
-      }
-
-      if (node.childNodes) {
-        pushNodes(nodeStack, node);
-        return nextTextNode(nodeStack);
-      }
-    }
-
-    pushNodes(nodeStack, cueDiv);
-
-    while (text = nextTextNode(nodeStack)) {
-      for (var i = 0; i < text.length; i++) {
-        charCode = text.charCodeAt(i);
-
-        if (isStrongRTLChar(charCode)) {
-          return "rtl";
-        }
-      }
-    }
-
-    return "ltr";
-  }
-
-  function computeLinePos(cue) {
-    if (typeof cue.line === "number" && (cue.snapToLines || cue.line >= 0 && cue.line <= 100)) {
-      return cue.line;
-    }
-
-    if (!cue.track || !cue.track.textTrackList || !cue.track.textTrackList.mediaElement) {
-      return -1;
-    }
-
-    var track = cue.track,
-        trackList = track.textTrackList,
-        count = 0;
-
-    for (var i = 0; i < trackList.length && trackList[i] !== track; i++) {
-      if (trackList[i].mode === "showing") {
-        count++;
-      }
-    }
-
-    return ++count * -1;
-  }
-
-  function StyleBox() {} // Apply styles to a div. If there is no div passed then it defaults to the
-  // div on 'this'.
-
-
-  StyleBox.prototype.applyStyles = function (styles, div) {
-    div = div || this.div;
-
-    for (var prop in styles) {
-      if (styles.hasOwnProperty(prop)) {
-        div.style[prop] = styles[prop];
-      }
-    }
+    return parseContent_1(window, cuetext);
   };
 
-  StyleBox.prototype.formatStyle = function (val, unit) {
-    return val === 0 ? 0 : val + unit;
-  }; // Constructs the computed display state of the cue (a div). Places the div
-  // into the overlay which should be a block level element (usually a div).
+  var convertCueToDomTree = convertCueToDOMTree;
 
-
-  function CueStyleBox(window, cue, styleOptions) {
-    StyleBox.call(this);
-    this.cue = cue; // Parse our cue's text into a DOM tree rooted at 'cueDiv'. This div will
-    // have inline positioning and will function as the cue background box.
-
-    this.cueDiv = parseContent(window, cue.text);
-    var styles = {
-      color: "rgba(255, 255, 255, 1)",
-      backgroundColor: "rgba(0, 0, 0, 0.8)",
-      position: "relative",
-      left: 0,
-      right: 0,
-      top: 0,
-      bottom: 0,
-      display: "inline",
-      writingMode: cue.vertical === "" ? "horizontal-tb" : cue.vertical === "lr" ? "vertical-lr" : "vertical-rl",
-      unicodeBidi: "plaintext"
-    };
-    this.applyStyles(styles, this.cueDiv); // Create an absolutely positioned div that will be used to position the cue
-    // div. Note, all WebVTT cue-setting alignments are equivalent to the CSS
-    // mirrors of them except middle instead of center on Safari.
-
-    this.div = window.document.createElement("div");
-    styles = {
-      direction: determineBidi(this.cueDiv),
-      writingMode: cue.vertical === "" ? "horizontal-tb" : cue.vertical === "lr" ? "vertical-lr" : "vertical-rl",
-      unicodeBidi: "plaintext",
-      textAlign: cue.align === "middle" ? "center" : cue.align,
-      font: styleOptions.font,
-      whiteSpace: "pre-line",
-      position: "absolute"
-    };
-    this.applyStyles(styles);
-    this.div.appendChild(this.cueDiv); // Calculate the distance from the reference edge of the viewport to the text
-    // position of the cue box. The reference edge will be resolved later when
-    // the box orientation styles are applied.
-
-    var textPos = 0;
-
-    switch (cue.positionAlign) {
-      case "start":
-        textPos = cue.position;
-        break;
-
-      case "center":
-        textPos = cue.position - cue.size / 2;
-        break;
-
-      case "end":
-        textPos = cue.position - cue.size;
-        break;
-    } // Horizontal box orientation; textPos is the distance from the left edge of the
-    // area to the left edge of the box and cue.size is the distance extending to
-    // the right from there.
-
-
-    if (cue.vertical === "") {
-      this.applyStyles({
-        left: this.formatStyle(textPos, "%"),
-        width: this.formatStyle(cue.size, "%")
-      }); // Vertical box orientation; textPos is the distance from the top edge of the
-      // area to the top edge of the box and cue.size is the height extending
-      // downwards from there.
-    } else {
-      this.applyStyles({
-        top: this.formatStyle(textPos, "%"),
-        height: this.formatStyle(cue.size, "%")
-      });
-    }
-
-    this.move = function (box) {
-      this.applyStyles({
-        top: this.formatStyle(box.top, "px"),
-        bottom: this.formatStyle(box.bottom, "px"),
-        left: this.formatStyle(box.left, "px"),
-        right: this.formatStyle(box.right, "px"),
-        height: this.formatStyle(box.height, "px"),
-        width: this.formatStyle(box.width, "px")
-      });
-    };
-  }
-
-  CueStyleBox.prototype = _objCreate(StyleBox.prototype);
-  CueStyleBox.prototype.constructor = CueStyleBox; // Represents the co-ordinates of an Element in a way that we can easily
+  // Represents the co-ordinates of an Element in a way that we can easily
   // compute things with such as if it overlaps or intersects with another Element.
   // Can initialize it with either a StyleBox or another BoxPosition.
-
   function BoxPosition(obj) {
     // Either a BoxPosition was passed in and we need to copy it, or a StyleBox
     // was passed in and we need to copy the results of 'getBoundingClientRect'
@@ -9588,10 +9126,228 @@
       width: obj.width || width
     };
     return ret;
-  }; // Move a StyleBox to its specified, or next best, position. The containerBox
+  };
+
+  var boxPosition = BoxPosition;
+
+  function StyleBox() {} // Apply styles to a div. If there is no div passed then it defaults to the
+  // div on 'this'.
+
+
+  StyleBox.prototype.applyStyles = function (styles, div) {
+    div = div || this.div;
+
+    for (var prop in styles) {
+      if (Object.prototype.hasOwnProperty.call(styles, prop)) {
+        div.style[prop] = styles[prop];
+      }
+    }
+  };
+
+  StyleBox.prototype.formatStyle = function (val, unit) {
+    return val === 0 ? 0 : val + unit;
+  };
+
+  var styleBox = StyleBox;
+
+  // This is a list of all the Unicode characters that have a strong
+  // right-to-left category. What this means is that these characters are
+  // written right-to-left for sure. It was generated by pulling all the strong
+  // right-to-left characters out of the Unicode data table. That table can
+  // found at: http://www.unicode.org/Public/UNIDATA/UnicodeData.txt
+  var strongRTLRanges = [[0x5be, 0x5be], [0x5c0, 0x5c0], [0x5c3, 0x5c3], [0x5c6, 0x5c6], [0x5d0, 0x5ea], [0x5f0, 0x5f4], [0x608, 0x608], [0x60b, 0x60b], [0x60d, 0x60d], [0x61b, 0x61b], [0x61e, 0x64a], [0x66d, 0x66f], [0x671, 0x6d5], [0x6e5, 0x6e6], [0x6ee, 0x6ef], [0x6fa, 0x70d], [0x70f, 0x710], [0x712, 0x72f], [0x74d, 0x7a5], [0x7b1, 0x7b1], [0x7c0, 0x7ea], [0x7f4, 0x7f5], [0x7fa, 0x7fa], [0x800, 0x815], [0x81a, 0x81a], [0x824, 0x824], [0x828, 0x828], [0x830, 0x83e], [0x840, 0x858], [0x85e, 0x85e], [0x8a0, 0x8a0], [0x8a2, 0x8ac], [0x200f, 0x200f], [0xfb1d, 0xfb1d], [0xfb1f, 0xfb28], [0xfb2a, 0xfb36], [0xfb38, 0xfb3c], [0xfb3e, 0xfb3e], [0xfb40, 0xfb41], [0xfb43, 0xfb44], [0xfb46, 0xfbc1], [0xfbd3, 0xfd3d], [0xfd50, 0xfd8f], [0xfd92, 0xfdc7], [0xfdf0, 0xfdfc], [0xfe70, 0xfe74], [0xfe76, 0xfefc], [0x10800, 0x10805], [0x10808, 0x10808], [0x1080a, 0x10835], [0x10837, 0x10838], [0x1083c, 0x1083c], [0x1083f, 0x10855], [0x10857, 0x1085f], [0x10900, 0x1091b], [0x10920, 0x10939], [0x1093f, 0x1093f], [0x10980, 0x109b7], [0x109be, 0x109bf], [0x10a00, 0x10a00], [0x10a10, 0x10a13], [0x10a15, 0x10a17], [0x10a19, 0x10a33], [0x10a40, 0x10a47], [0x10a50, 0x10a58], [0x10a60, 0x10a7f], [0x10b00, 0x10b35], [0x10b40, 0x10b55], [0x10b58, 0x10b72], [0x10b78, 0x10b7f], [0x10c00, 0x10c48], [0x1ee00, 0x1ee03], [0x1ee05, 0x1ee1f], [0x1ee21, 0x1ee22], [0x1ee24, 0x1ee24], [0x1ee27, 0x1ee27], [0x1ee29, 0x1ee32], [0x1ee34, 0x1ee37], [0x1ee39, 0x1ee39], [0x1ee3b, 0x1ee3b], [0x1ee42, 0x1ee42], [0x1ee47, 0x1ee47], [0x1ee49, 0x1ee49], [0x1ee4b, 0x1ee4b], [0x1ee4d, 0x1ee4f], [0x1ee51, 0x1ee52], [0x1ee54, 0x1ee54], [0x1ee57, 0x1ee57], [0x1ee59, 0x1ee59], [0x1ee5b, 0x1ee5b], [0x1ee5d, 0x1ee5d], [0x1ee5f, 0x1ee5f], [0x1ee61, 0x1ee62], [0x1ee64, 0x1ee64], [0x1ee67, 0x1ee6a], [0x1ee6c, 0x1ee72], [0x1ee74, 0x1ee77], [0x1ee79, 0x1ee7c], [0x1ee7e, 0x1ee7e], [0x1ee80, 0x1ee89], [0x1ee8b, 0x1ee9b], [0x1eea1, 0x1eea3], [0x1eea5, 0x1eea9], [0x1eeab, 0x1eebb], [0x10fffd, 0x10fffd]];
+
+  function isStrongRTLChar(charCode) {
+    for (var i = 0; i < strongRTLRanges.length; i++) {
+      var currentRange = strongRTLRanges[i];
+
+      if (charCode >= currentRange[0] && charCode <= currentRange[1]) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  var isStrongRtlChar = isStrongRTLChar;
+
+  function determineBidi(cueDiv) {
+    var nodeStack = [],
+        text = "",
+        charCode;
+
+    if (!cueDiv || !cueDiv.childNodes) {
+      return "ltr";
+    }
+
+    function pushNodes(nodeStack, node) {
+      for (var i = node.childNodes.length - 1; i >= 0; i--) {
+        nodeStack.push(node.childNodes[i]);
+      }
+    }
+
+    function nextTextNode(nodeStack) {
+      if (!nodeStack || !nodeStack.length) {
+        return null;
+      }
+
+      var node = nodeStack.pop(),
+          text = node.textContent || node.innerText;
+
+      if (text) {
+        // TODO: This should match all unicode type B characters (paragraph
+        // separator characters). See issue #115.
+        var m = text.match(/^.*(\n|\r)/);
+
+        if (m) {
+          nodeStack.length = 0;
+          return m[0];
+        }
+
+        return text;
+      }
+
+      if (node.tagName === "ruby") {
+        return nextTextNode(nodeStack);
+      }
+
+      if (node.childNodes) {
+        pushNodes(nodeStack, node);
+        return nextTextNode(nodeStack);
+      }
+    }
+
+    pushNodes(nodeStack, cueDiv);
+
+    while (text = nextTextNode(nodeStack)) {
+      for (var i = 0; i < text.length; i++) {
+        charCode = text.charCodeAt(i);
+
+        if (isStrongRtlChar(charCode)) {
+          return "rtl";
+        }
+      }
+    }
+
+    return "ltr";
+  }
+
+  var determineBidi_1 = determineBidi;
+
+  // into the overlay which should be a block level element (usually a div).
+
+  function CueStyleBox(window, cue, styleOptions) {
+    styleBox.call(this);
+    this.cue = cue; // Parse our cue's text into a DOM tree rooted at 'cueDiv'. This div will
+    // have inline positioning and will function as the cue background box.
+
+    this.cueDiv = parseContent_1(window, cue.text);
+    var styles = {
+      color: "rgba(255, 255, 255, 1)",
+      backgroundColor: "rgba(0, 0, 0, 0.8)",
+      position: "relative",
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+      display: "inline",
+      writingMode: cue.vertical === "" ? "horizontal-tb" : cue.vertical === "lr" ? "vertical-lr" : "vertical-rl",
+      unicodeBidi: "plaintext"
+    };
+    this.applyStyles(styles, this.cueDiv); // Create an absolutely positioned div that will be used to position the cue
+    // div. Note, all WebVTT cue-setting alignments are equivalent to the CSS
+    // mirrors of them except middle instead of center on Safari.
+
+    this.div = window.document.createElement("div");
+    styles = {
+      direction: determineBidi_1(this.cueDiv),
+      writingMode: cue.vertical === "" ? "horizontal-tb" : cue.vertical === "lr" ? "vertical-lr" : "vertical-rl",
+      unicodeBidi: "plaintext",
+      textAlign: cue.align === "middle" ? "center" : cue.align,
+      font: styleOptions.font,
+      whiteSpace: "pre-line",
+      position: "absolute"
+    };
+    this.applyStyles(styles);
+    this.div.appendChild(this.cueDiv); // Calculate the distance from the reference edge of the viewport to the text
+    // position of the cue box. The reference edge will be resolved later when
+    // the box orientation styles are applied.
+
+    var textPos = 0;
+
+    switch (cue.positionAlign) {
+      case "start":
+        textPos = cue.position;
+        break;
+
+      case "center":
+        textPos = cue.position - cue.size / 2;
+        break;
+
+      case "end":
+        textPos = cue.position - cue.size;
+        break;
+    } // Horizontal box orientation; textPos is the distance from the left edge of the
+    // area to the left edge of the box and cue.size is the distance extending to
+    // the right from there.
+
+
+    if (cue.vertical === "") {
+      this.applyStyles({
+        left: this.formatStyle(textPos, "%"),
+        width: this.formatStyle(cue.size, "%")
+      }); // Vertical box orientation; textPos is the distance from the top edge of the
+      // area to the top edge of the box and cue.size is the height extending
+      // downwards from there.
+    } else {
+      this.applyStyles({
+        top: this.formatStyle(textPos, "%"),
+        height: this.formatStyle(cue.size, "%")
+      });
+    }
+
+    this.move = function (box) {
+      this.applyStyles({
+        top: this.formatStyle(box.top, "px"),
+        bottom: this.formatStyle(box.bottom, "px"),
+        left: this.formatStyle(box.left, "px"),
+        right: this.formatStyle(box.right, "px"),
+        height: this.formatStyle(box.height, "px"),
+        width: this.formatStyle(box.width, "px")
+      });
+    };
+  }
+
+  CueStyleBox.prototype = Object.create(styleBox.prototype);
+  CueStyleBox.prototype.constructor = CueStyleBox;
+  var cueStyleBox = CueStyleBox;
+
+  function computeLinePos(cue) {
+    if (typeof cue.line === "number" && (cue.snapToLines || cue.line >= 0 && cue.line <= 100)) {
+      return cue.line;
+    }
+
+    if (!cue.track || !cue.track.textTrackList || !cue.track.textTrackList.mediaElement) {
+      return -1;
+    }
+
+    var track = cue.track,
+        trackList = track.textTrackList,
+        count = 0;
+
+    for (var i = 0; i < trackList.length && trackList[i] !== track; i++) {
+      if (trackList[i].mode === "showing") {
+        count++;
+      }
+    }
+
+    return ++count * -1;
+  }
+
+  var computeLinePos_1 = computeLinePos;
+
   // is the box that contains the StyleBox, such as a div. boxPositions are
   // a list of other boxes that the styleBox can't overlap with.
-
 
   function moveBoxToLinePosition(window, styleBox, containerBox, boxPositions) {
     // Find the best position for a cue box, b, on the video. The axis parameter
@@ -9601,7 +9357,7 @@
     // it along the x axis in the negative direction.
     function findBestPosition(b, axis) {
       var bestPosition,
-          specifiedPosition = new BoxPosition(b),
+          specifiedPosition = new boxPosition(b),
           percentage = 1; // Highest possible so the first thing we get is better.
 
       for (var i = 0; i < axis.length; i++) {
@@ -9619,20 +9375,20 @@
         // then remember this position as the best position.
 
         if (percentage > p) {
-          bestPosition = new BoxPosition(b);
+          bestPosition = new boxPosition(b);
           percentage = p;
         } // Reset the box position to the specified position.
 
 
-        b = new BoxPosition(specifiedPosition);
+        b = new boxPosition(specifiedPosition);
       }
 
       return bestPosition || specifiedPosition;
     }
 
-    var boxPosition = new BoxPosition(styleBox),
+    var boxPosition$1 = new boxPosition(styleBox),
         cue = styleBox.cue,
-        linePos = computeLinePos(cue),
+        linePos = computeLinePos_1(cue),
         axis = []; // If we have a line number to align the cue to.
 
     if (cue.snapToLines) {
@@ -9655,7 +9411,7 @@
           break;
       }
 
-      var step = boxPosition.lineHeight,
+      var step = boxPosition$1.lineHeight,
           position = step * Math.round(linePos),
           maxPosition = containerBox[size] + step,
           initialAxis = axis[0]; // If the specified intial position is greater then the max position then
@@ -9678,10 +9434,10 @@
       // position.
 
 
-      boxPosition.move(initialAxis, position);
+      boxPosition$1.move(initialAxis, position);
     } else {
       // If we have a percentage line value for the cue.
-      var calculatedPercentage = boxPosition.lineHeight / containerBox.height * 100;
+      var calculatedPercentage = boxPosition$1.lineHeight / containerBox.height * 100;
 
       switch (cue.lineAlign) {
         case "center":
@@ -9717,40 +9473,14 @@
       axis = ["+y", "-x", "+x", "-y"]; // Get the box position again after we've applied the specified positioning
       // to it.
 
-      boxPosition = new BoxPosition(styleBox);
+      boxPosition$1 = new boxPosition(styleBox);
     }
 
-    var bestPosition = findBestPosition(boxPosition, axis);
+    var bestPosition = findBestPosition(boxPosition$1, axis);
     styleBox.move(bestPosition.toCSSCompatValues(containerBox));
   }
 
-  function WebVTT$1() {} // Nothing
-  // Helper to allow strings to be decoded instead of the default binary utf8 data.
-
-
-  WebVTT$1.StringDecoder = function () {
-    return {
-      decode: function decode(data) {
-        if (!data) {
-          return "";
-        }
-
-        if (typeof data !== "string") {
-          throw new Error("Error - expected string data.");
-        }
-
-        return decodeURIComponent(encodeURIComponent(data));
-      }
-    };
-  };
-
-  WebVTT$1.convertCueToDOMTree = function (window, cuetext) {
-    if (!window || !cuetext) {
-      return null;
-    }
-
-    return parseContent(window, cuetext);
-  };
+  var moveBoxToLinePosition_1 = moveBoxToLinePosition;
 
   var FONT_SIZE_PERCENT = 0.05;
   var FONT_STYLE = "sans-serif";
@@ -9758,7 +9488,7 @@
   // @param overlay A block level element (usually a div) that the computed cues
   //                and regions will be placed into.
 
-  WebVTT$1.processCues = function (window, cues, overlay) {
+  var processCues = function processCues(window, cues, overlay) {
     if (!window || !cues || !overlay) {
       return null;
     } // Remove all previous children.
@@ -9799,7 +9529,7 @@
     }
 
     var boxPositions = [],
-        containerBox = BoxPosition.getSimpleBoxPosition(paddedOverlay),
+        containerBox = boxPosition.getSimpleBoxPosition(paddedOverlay),
         fontSize = Math.round(containerBox.height * FONT_SIZE_PERCENT * 100) / 100;
     var styleOptions = {
       font: fontSize + "px " + FONT_STYLE
@@ -9811,19 +9541,270 @@
       for (var i = 0; i < cues.length; i++) {
         cue = cues[i]; // Compute the intial position and styles of the cue div.
 
-        styleBox = new CueStyleBox(window, cue, styleOptions);
+        styleBox = new cueStyleBox(window, cue, styleOptions);
         paddedOverlay.appendChild(styleBox.div); // Move the cue div to it's correct line position.
 
-        moveBoxToLinePosition(window, styleBox, containerBox, boxPositions); // Remember the computed div so that we don't have to recompute it later
+        moveBoxToLinePosition_1(window, styleBox, containerBox, boxPositions); // Remember the computed div so that we don't have to recompute it later
         // if we don't have too.
 
         cue.displayState = styleBox.div;
-        boxPositions.push(BoxPosition.getSimpleBoxPosition(styleBox));
+        boxPositions.push(boxPosition.getSimpleBoxPosition(styleBox));
       }
     })();
   };
 
-  WebVTT$1.Parser = function (window, vttjs, decoder) {
+  var processCues_1 = processCues;
+
+  // Creates a new ParserError object from an errorData object. The errorData
+  // object should have default code and message properties. The default message
+  // property can be overriden by passing in a message parameter.
+  // See ParsingError.Errors below for acceptable errors.
+  function ParsingError(errorData, message) {
+    this.name = "ParsingError";
+    this.code = errorData.code;
+    this.message = message || errorData.message;
+  }
+
+  ParsingError.prototype = Object.create(Error.prototype);
+  ParsingError.prototype.constructor = ParsingError; // ParsingError metadata for acceptable ParsingErrors.
+
+  ParsingError.Errors = {
+    BadSignature: {
+      code: 0,
+      message: "Malformed WebVTT signature."
+    },
+    BadTimeStamp: {
+      code: 1,
+      message: "Malformed time stamp."
+    }
+  };
+  var parsingError = ParsingError;
+
+  // A settings object holds key/value pairs and will ignore anything but the first
+  // assignment to a specific key.
+  function Settings() {
+    this.values = Object.create(null);
+  }
+
+  Settings.prototype = {
+    // Only accept the first assignment to any key.
+    set: function set(k, v) {
+      if (!this.get(k) && v !== "") {
+        this.values[k] = v;
+      }
+    },
+    // Return the value for a key, or a default value.
+    // If 'defaultKey' is passed then 'dflt' is assumed to be an object with
+    // a number of possible default values as properties where 'defaultKey' is
+    // the key of the property that will be chosen; otherwise it's assumed to be
+    // a single value.
+    get: function get(k, dflt, defaultKey) {
+      if (defaultKey) {
+        return this.has(k) ? this.values[k] : dflt[defaultKey];
+      }
+
+      return this.has(k) ? this.values[k] : dflt;
+    },
+    // Check whether we have a value for a key.
+    has: function has(k) {
+      return k in this.values;
+    },
+    // Accept a setting if its one of the given alternatives.
+    alt: function alt(k, v, a) {
+      for (var n = 0; n < a.length; ++n) {
+        if (v === a[n]) {
+          this.set(k, v);
+          break;
+        }
+      }
+    },
+    // Accept a setting if its a valid (signed) integer.
+    integer: function integer(k, v) {
+      if (/^-?\d+$/.test(v)) {
+        // integer
+        this.set(k, parseInt(v, 10));
+      }
+    },
+    // Accept a setting if its a valid percentage.
+    percent: function percent(k, v) {
+      // eslint-disable-next-line
+      var m;
+
+      if (m = v.match(/^([\d]{1,3})(\.[\d]*)?%$/)) {
+        v = parseFloat(v);
+
+        if (v >= 0 && v <= 100) {
+          this.set(k, v);
+          return true;
+        }
+      }
+
+      return false;
+    }
+  };
+  var settings = Settings;
+
+  // Helper function to parse input into groups separated by 'groupDelim', and
+  // interprete each group as a key/value pair separated by 'keyValueDelim'.
+  function parseOptions(input, callback, keyValueDelim, groupDelim) {
+    var groups = groupDelim ? input.split(groupDelim) : [input];
+
+    for (var i in groups) {
+      if (typeof groups[i] !== "string") {
+        continue;
+      }
+
+      var kv = groups[i].split(keyValueDelim);
+
+      if (kv.length !== 2) {
+        continue;
+      }
+
+      var k = kv[0];
+      var v = kv[1];
+      callback(k, v);
+    }
+  }
+
+  var parseOptions_1 = parseOptions;
+
+  function parseCue(input, cue, regionList) {
+    // Remember the original input if we need to throw an error.
+    var oInput = input; // 4.1 WebVTT timestamp
+
+    function consumeTimeStamp() {
+      var ts = parseTimestamp(input);
+
+      if (ts === null) {
+        throw new parsingError(parsingError.Errors.BadTimeStamp, "Malformed timestamp: " + oInput);
+      } // Remove time stamp from input.
+
+
+      input = input.replace(/^[^\sa-zA-Z-]+/, "");
+      return ts;
+    } // 4.4.2 WebVTT cue settings
+
+
+    function consumeCueSettings(input, cue) {
+      var settings$1 = new settings();
+      parseOptions_1(input, function (k, v) {
+        switch (k) {
+          case "region":
+            // Find the last region we parsed with the same region id.
+            for (var i = regionList.length - 1; i >= 0; i--) {
+              if (regionList[i].id === v) {
+                settings$1.set(k, regionList[i].region);
+                break;
+              }
+            }
+
+            break;
+
+          case "vertical":
+            settings$1.alt(k, v, ["rl", "lr"]);
+            break;
+
+          case "line":
+            var vals = v.split(","),
+                vals0 = vals[0];
+            settings$1.integer(k, vals0);
+            settings$1.percent(k, vals0) ? settings$1.set("snapToLines", false) : null;
+            settings$1.alt(k, vals0, ["auto"]);
+
+            if (vals.length === 2) {
+              settings$1.alt("lineAlign", vals[1], ["start", "center", "end"]);
+            }
+
+            break;
+
+          case "position":
+            vals = v.split(",");
+            settings$1.percent(k, vals[0]);
+
+            if (vals.length === 2) {
+              settings$1.alt("positionAlign", vals[1], ["start", "center", "end"]);
+            }
+
+            break;
+
+          case "size":
+            settings$1.percent(k, v);
+            break;
+
+          case "align":
+            settings$1.alt(k, v, ["start", "center", "end", "left", "right"]);
+            break;
+        }
+      }, /:/, /\s/); // Apply default values for any missing fields.
+
+      cue.region = settings$1.get("region", null);
+      cue.vertical = settings$1.get("vertical", "");
+
+      try {
+        cue.line = settings$1.get("line", "auto");
+      } catch (e) {// eslint-ignore-line
+      }
+
+      cue.lineAlign = settings$1.get("lineAlign", "start");
+      cue.snapToLines = settings$1.get("snapToLines", true);
+      cue.size = settings$1.get("size", 100); // Safari still uses the old middle value and won't accept center
+
+      try {
+        cue.align = settings$1.get("align", "center");
+      } catch (e) {
+        cue.align = settings$1.get("align", "middle");
+      }
+
+      try {
+        cue.position = settings$1.get("position", "auto");
+      } catch (e) {
+        cue.position = settings$1.get("position", {
+          start: 0,
+          left: 0,
+          center: 50,
+          middle: 50,
+          end: 100,
+          right: 100
+        }, cue.align);
+      }
+
+      cue.positionAlign = settings$1.get("positionAlign", {
+        start: "start",
+        left: "start",
+        center: "center",
+        middle: "center",
+        end: "end",
+        right: "end"
+      }, cue.align);
+    }
+
+    function skipWhitespace() {
+      input = input.replace(/^\s+/, "");
+    } // 4.1 WebVTT cue timings.
+
+
+    skipWhitespace();
+    cue.startTime = consumeTimeStamp(); // (1) collect cue start time
+
+    skipWhitespace();
+
+    if (input.substr(0, 3) !== "-->") {
+      // (3) next characters must match "-->"
+      throw new parsingError(parsingError.Errors.BadTimeStamp, "Malformed time stamp (time stamps must be separated by '-->'): " + oInput);
+    }
+
+    input = input.substr(3);
+    skipWhitespace();
+    cue.endTime = consumeTimeStamp(); // (5) collect cue end time
+    // 4.1 WebVTT cue settings list.
+
+    skipWhitespace();
+    consumeCueSettings(input, cue);
+  }
+
+  var parseCue_1 = parseCue;
+
+  var Parser = function Parser(window, vttjs, decoder) {
     if (!decoder) {
       decoder = vttjs;
       vttjs = {};
@@ -9837,338 +9818,339 @@
     this.vttjs = vttjs;
     this.state = "INITIAL";
     this.buffer = "";
-    this.decoder = decoder || new TextDecoder("utf8");
+    this.decoder = decoder || new window.TextDecoder("utf8");
     this.regionList = [];
-  };
-
-  WebVTT$1.Parser.prototype = {
-    // If the error is a ParsingError then report it to the consumer if
-    // possible. If it's not a ParsingError then throw it like normal.
-    reportOrThrowError: function reportOrThrowError(e) {
-      if (e instanceof ParsingError) {
-        this.onparsingerror && this.onparsingerror(e);
-      } else {
-        throw e;
-      }
-    },
-    parse: function parse(data) {
-      var self = this; // If there is no data then we won't decode it, but will just try to parse
-      // whatever is in buffer already. This may occur in circumstances, for
-      // example when flush() is called.
-
-      if (data) {
-        // Try to decode the data that we received.
-        self.buffer += self.decoder.decode(data, {
-          stream: true
-        });
-      }
-
-      function collectNextLine() {
-        var buffer = self.buffer;
-        var pos = 0;
-
-        while (pos < buffer.length && buffer[pos] !== '\r' && buffer[pos] !== '\n') {
-          ++pos;
-        }
-
-        var line = buffer.substr(0, pos); // Advance the buffer early in case we fail below.
-
-        if (buffer[pos] === '\r') {
-          ++pos;
-        }
-
-        if (buffer[pos] === '\n') {
-          ++pos;
-        }
-
-        self.buffer = buffer.substr(pos);
-        return line;
-      } // 3.4 WebVTT region and WebVTT region settings syntax
-
-
-      function parseRegion(input) {
-        var settings = new Settings();
-        parseOptions(input, function (k, v) {
-          switch (k) {
-            case "id":
-              settings.set(k, v);
-              break;
-
-            case "width":
-              settings.percent(k, v);
-              break;
-
-            case "lines":
-              settings.integer(k, v);
-              break;
-
-            case "regionanchor":
-            case "viewportanchor":
-              var xy = v.split(',');
-
-              if (xy.length !== 2) {
-                break;
-              } // We have to make sure both x and y parse, so use a temporary
-              // settings object here.
-
-
-              var anchor = new Settings();
-              anchor.percent("x", xy[0]);
-              anchor.percent("y", xy[1]);
-
-              if (!anchor.has("x") || !anchor.has("y")) {
-                break;
-              }
-
-              settings.set(k + "X", anchor.get("x"));
-              settings.set(k + "Y", anchor.get("y"));
-              break;
-
-            case "scroll":
-              settings.alt(k, v, ["up"]);
-              break;
-          }
-        }, /=/, /\s/); // Create the region, using default values for any values that were not
-        // specified.
-
-        if (settings.has("id")) {
-          var region = new (self.vttjs.VTTRegion || self.window.VTTRegion)();
-          region.width = settings.get("width", 100);
-          region.lines = settings.get("lines", 3);
-          region.regionAnchorX = settings.get("regionanchorX", 0);
-          region.regionAnchorY = settings.get("regionanchorY", 100);
-          region.viewportAnchorX = settings.get("viewportanchorX", 0);
-          region.viewportAnchorY = settings.get("viewportanchorY", 100);
-          region.scroll = settings.get("scroll", ""); // Register the region.
-
-          self.onregion && self.onregion(region); // Remember the VTTRegion for later in case we parse any VTTCues that
-          // reference it.
-
-          self.regionList.push({
-            id: settings.get("id"),
-            region: region
-          });
-        }
-      } // draft-pantos-http-live-streaming-20
-      // https://tools.ietf.org/html/draft-pantos-http-live-streaming-20#section-3.5
-      // 3.5 WebVTT
-
-
-      function parseTimestampMap(input) {
-        var settings = new Settings();
-        parseOptions(input, function (k, v) {
-          switch (k) {
-            case "MPEGT":
-              settings.integer(k + 'S', v);
-              break;
-
-            case "LOCA":
-              settings.set(k + 'L', parseTimeStamp(v));
-              break;
-          }
-        }, /[^\d]:/, /,/);
-        self.ontimestampmap && self.ontimestampmap({
-          "MPEGTS": settings.get("MPEGTS"),
-          "LOCAL": settings.get("LOCAL")
-        });
-      } // 3.2 WebVTT metadata header syntax
-
-
-      function parseHeader(input) {
-        if (input.match(/X-TIMESTAMP-MAP/)) {
-          // This line contains HLS X-TIMESTAMP-MAP metadata
-          parseOptions(input, function (k, v) {
-            switch (k) {
-              case "X-TIMESTAMP-MAP":
-                parseTimestampMap(v);
-                break;
-            }
-          }, /=/);
-        } else {
-          parseOptions(input, function (k, v) {
-            switch (k) {
-              case "Region":
-                // 3.3 WebVTT region metadata header syntax
-                parseRegion(v);
-                break;
-            }
-          }, /:/);
-        }
-      } // 5.1 WebVTT file parsing.
-
-
-      try {
-        var line;
-
-        if (self.state === "INITIAL") {
-          // We can't start parsing until we have the first line.
-          if (!/\r\n|\n/.test(self.buffer)) {
-            return this;
-          }
-
-          line = collectNextLine();
-          var m = line.match(/^WEBVTT([ \t].*)?$/);
-
-          if (!m || !m[0]) {
-            throw new ParsingError(ParsingError.Errors.BadSignature);
-          }
-
-          self.state = "HEADER";
-        }
-
-        var alreadyCollectedLine = false;
-
-        while (self.buffer) {
-          // We can't parse a line until we have the full line.
-          if (!/\r\n|\n/.test(self.buffer)) {
-            return this;
-          }
-
-          if (!alreadyCollectedLine) {
-            line = collectNextLine();
-          } else {
-            alreadyCollectedLine = false;
-          }
-
-          switch (self.state) {
-            case "HEADER":
-              // 13-18 - Allow a header (metadata) under the WEBVTT line.
-              if (/:/.test(line)) {
-                parseHeader(line);
-              } else if (!line) {
-                // An empty line terminates the header and starts the body (cues).
-                self.state = "ID";
-              }
-
-              continue;
-
-            case "NOTE":
-              // Ignore NOTE blocks.
-              if (!line) {
-                self.state = "ID";
-              }
-
-              continue;
-
-            case "ID":
-              // Check for the start of NOTE blocks.
-              if (/^NOTE($|[ \t])/.test(line)) {
-                self.state = "NOTE";
-                break;
-              } // 19-29 - Allow any number of line terminators, then initialize new cue values.
-
-
-              if (!line) {
-                continue;
-              }
-
-              self.cue = new (self.vttjs.VTTCue || self.window.VTTCue)(0, 0, ""); // Safari still uses the old middle value and won't accept center
-
-              try {
-                self.cue.align = "center";
-              } catch (e) {
-                self.cue.align = "middle";
-              }
-
-              self.state = "CUE"; // 30-39 - Check if self line contains an optional identifier or timing data.
-
-              if (line.indexOf("-->") === -1) {
-                self.cue.id = line;
-                continue;
-              }
-
-            // Process line as start of a cue.
-
-            /*falls through*/
-
-            case "CUE":
-              // 40 - Collect cue timings and settings.
-              try {
-                parseCue(line, self.cue, self.regionList);
-              } catch (e) {
-                self.reportOrThrowError(e); // In case of an error ignore rest of the cue.
-
-                self.cue = null;
-                self.state = "BADCUE";
-                continue;
-              }
-
-              self.state = "CUETEXT";
-              continue;
-
-            case "CUETEXT":
-              var hasSubstring = line.indexOf("-->") !== -1; // 34 - If we have an empty line then report the cue.
-              // 35 - If we have the special substring '-->' then report the cue,
-              // but do not collect the line as we need to process the current
-              // one as a new cue.
-
-              if (!line || hasSubstring && (alreadyCollectedLine = true)) {
-                // We are done parsing self cue.
-                self.oncue && self.oncue(self.cue);
-                self.cue = null;
-                self.state = "ID";
-                continue;
-              }
-
-              if (self.cue.text) {
-                self.cue.text += "\n";
-              }
-
-              self.cue.text += line.replace(/\u2028/g, '\n').replace(/u2029/g, '\n');
-              continue;
-
-            case "BADCUE":
-              // BADCUE
-              // 54-62 - Collect and discard the remaining cue.
-              if (!line) {
-                self.state = "ID";
-              }
-
-              continue;
-          }
-        }
-      } catch (e) {
-        self.reportOrThrowError(e); // If we are currently parsing a cue, report what we have.
-
-        if (self.state === "CUETEXT" && self.cue && self.oncue) {
-          self.oncue(self.cue);
-        }
-
-        self.cue = null; // Enter BADWEBVTT state if header was not parsed correctly otherwise
-        // another exception occurred so enter BADCUE state.
-
-        self.state = self.state === "INITIAL" ? "BADWEBVTT" : "BADCUE";
-      }
-
-      return this;
-    },
-    flush: function flush() {
-      var self = this;
-
-      try {
-        // Finish decoding the stream.
-        self.buffer += self.decoder.decode(); // Synthesize the end of the current cue or region.
-
-        if (self.cue || self.state === "HEADER") {
-          self.buffer += "\n\n";
-          self.parse();
-        } // If we've flushed, parsed, and we're still on the INITIAL state then
-        // that means we don't have enough of the stream to parse the first
-        // line.
-
-
-        if (self.state === "INITIAL") {
-          throw new ParsingError(ParsingError.Errors.BadSignature);
-        }
-      } catch (e) {
-        self.reportOrThrowError(e);
-      }
-
-      self.onflush && self.onflush();
-      return this;
+  }; // If the error is a ParsingError then report it to the consumer if
+  // possible. If it's not a ParsingError then throw it like normal.
+
+
+  Parser.prototype.reportOrThrowError = function (e) {
+    if (e instanceof parsingError) {
+      this.onparsingerror && this.onparsingerror(e);
+    } else {
+      throw e;
     }
   };
-  var vtt = WebVTT$1;
+
+  Parser.prototype.parse = function (data) {
+    var self = this; // If there is no data then we won't decode it, but will just try to parse
+    // whatever is in buffer already. This may occur in circumstances, for
+    // example when flush() is called.
+
+    if (data) {
+      // Try to decode the data that we received.
+      self.buffer += self.decoder.decode(data, {
+        stream: true
+      });
+    }
+
+    function collectNextLine() {
+      var buffer = self.buffer;
+      var pos = 0;
+
+      while (pos < buffer.length && buffer[pos] !== '\r' && buffer[pos] !== '\n') {
+        ++pos;
+      }
+
+      var line = buffer.substr(0, pos); // Advance the buffer early in case we fail below.
+
+      if (buffer[pos] === '\r') {
+        ++pos;
+      }
+
+      if (buffer[pos] === '\n') {
+        ++pos;
+      }
+
+      self.buffer = buffer.substr(pos);
+      return line;
+    } // 3.4 WebVTT region and WebVTT region settings syntax
+
+
+    function parseRegion(input) {
+      var settings$1 = new settings();
+      parseOptions_1(input, function (k, v) {
+        switch (k) {
+          case "id":
+            settings$1.set(k, v);
+            break;
+
+          case "width":
+            settings$1.percent(k, v);
+            break;
+
+          case "lines":
+            settings$1.integer(k, v);
+            break;
+
+          case "regionanchor":
+          case "viewportanchor":
+            var xy = v.split(',');
+
+            if (xy.length !== 2) {
+              break;
+            } // We have to make sure both x and y parse, so use a temporary
+            // settings object here.
+
+
+            var anchor = new settings();
+            anchor.percent("x", xy[0]);
+            anchor.percent("y", xy[1]);
+
+            if (!anchor.has("x") || !anchor.has("y")) {
+              break;
+            }
+
+            settings$1.set(k + "X", anchor.get("x"));
+            settings$1.set(k + "Y", anchor.get("y"));
+            break;
+
+          case "scroll":
+            settings$1.alt(k, v, ["up"]);
+            break;
+        }
+      }, /=/, /\s/); // Create the region, using default values for any values that were not
+      // specified.
+
+      if (settings$1.has("id")) {
+        var region = new (self.vttjs.VTTRegion || self.window.VTTRegion)();
+        region.width = settings$1.get("width", 100);
+        region.lines = settings$1.get("lines", 3);
+        region.regionAnchorX = settings$1.get("regionanchorX", 0);
+        region.regionAnchorY = settings$1.get("regionanchorY", 100);
+        region.viewportAnchorX = settings$1.get("viewportanchorX", 0);
+        region.viewportAnchorY = settings$1.get("viewportanchorY", 100);
+        region.scroll = settings$1.get("scroll", ""); // Register the region.
+
+        self.onregion && self.onregion(region); // Remember the VTTRegion for later in case we parse any VTTCues that
+        // reference it.
+
+        self.regionList.push({
+          id: settings$1.get("id"),
+          region: region
+        });
+      }
+    } // draft-pantos-http-live-streaming-20
+    // https://tools.ietf.org/html/draft-pantos-http-live-streaming-20#section-3.5
+    // 3.5 WebVTT
+
+
+    function parseTimestampMap(input) {
+      var settings$1 = new settings();
+      parseOptions_1(input, function (k, v) {
+        switch (k) {
+          case "MPEGT":
+            settings$1.integer(k + 'S', v);
+            break;
+
+          case "LOCA":
+            settings$1.set(k + 'L', parseTimestamp(v));
+            break;
+        }
+      }, /[^\d]:/, /,/);
+      self.ontimestampmap && self.ontimestampmap({
+        "MPEGTS": settings$1.get("MPEGTS"),
+        "LOCAL": settings$1.get("LOCAL")
+      });
+    } // 3.2 WebVTT metadata header syntax
+
+
+    function parseHeader(input) {
+      if (input.match(/X-TIMESTAMP-MAP/)) {
+        // This line contains HLS X-TIMESTAMP-MAP metadata
+        parseOptions_1(input, function (k, v) {
+          switch (k) {
+            case "X-TIMESTAMP-MAP":
+              parseTimestampMap(v);
+              break;
+          }
+        }, /=/);
+      } else {
+        parseOptions_1(input, function (k, v) {
+          switch (k) {
+            case "Region":
+              // 3.3 WebVTT region metadata header syntax
+              parseRegion(v);
+              break;
+          }
+        }, /:/);
+      }
+    } // 5.1 WebVTT file parsing.
+
+
+    try {
+      var line;
+
+      if (self.state === "INITIAL") {
+        // We can't start parsing until we have the first line.
+        if (!/\r\n|\n/.test(self.buffer)) {
+          return this;
+        }
+
+        line = collectNextLine();
+        var m = line.match(/^WEBVTT([ \t].*)?$/);
+
+        if (!m || !m[0]) {
+          throw new parsingError(parsingError.Errors.BadSignature);
+        }
+
+        self.state = "HEADER";
+      }
+
+      var alreadyCollectedLine = false;
+
+      while (self.buffer) {
+        // We can't parse a line until we have the full line.
+        if (!/\r\n|\n/.test(self.buffer)) {
+          return this;
+        }
+
+        if (!alreadyCollectedLine) {
+          line = collectNextLine();
+        } else {
+          alreadyCollectedLine = false;
+        }
+
+        switch (self.state) {
+          case "HEADER":
+            // 13-18 - Allow a header (metadata) under the WEBVTT line.
+            if (/:/.test(line)) {
+              parseHeader(line);
+            } else if (!line) {
+              // An empty line terminates the header and starts the body (cues).
+              self.state = "ID";
+            }
+
+            continue;
+
+          case "NOTE":
+            // Ignore NOTE blocks.
+            if (!line) {
+              self.state = "ID";
+            }
+
+            continue;
+
+          case "ID":
+            // Check for the start of NOTE blocks.
+            if (/^NOTE($|[ \t])/.test(line)) {
+              self.state = "NOTE";
+              break;
+            } // 19-29 - Allow any number of line terminators, then initialize new cue values.
+
+
+            if (!line) {
+              continue;
+            }
+
+            self.cue = new (self.vttjs.VTTCue || self.window.VTTCue)(0, 0, ""); // Safari still uses the old middle value and won't accept center
+
+            try {
+              self.cue.align = "center";
+            } catch (e) {
+              self.cue.align = "middle";
+            }
+
+            self.state = "CUE"; // 30-39 - Check if self line contains an optional identifier or timing data.
+
+            if (line.indexOf("-->") === -1) {
+              self.cue.id = line;
+              continue;
+            }
+
+          // Process line as start of a cue.
+
+          /*falls through*/
+
+          case "CUE":
+            // 40 - Collect cue timings and settings.
+            try {
+              parseCue_1(line, self.cue, self.regionList);
+            } catch (e) {
+              self.reportOrThrowError(e); // In case of an error ignore rest of the cue.
+
+              self.cue = null;
+              self.state = "BADCUE";
+              continue;
+            }
+
+            self.state = "CUETEXT";
+            continue;
+
+          case "CUETEXT":
+            var hasSubstring = line.indexOf("-->") !== -1; // 34 - If we have an empty line then report the cue.
+            // 35 - If we have the special substring '-->' then report the cue,
+            // but do not collect the line as we need to process the current
+            // one as a new cue.
+
+            if (!line || hasSubstring && (alreadyCollectedLine = true)) {
+              // We are done parsing self cue.
+              self.oncue && self.oncue(self.cue);
+              self.cue = null;
+              self.state = "ID";
+              continue;
+            }
+
+            if (self.cue.text) {
+              self.cue.text += "\n";
+            }
+
+            self.cue.text += line.replace(/\u2028/g, '\n').replace(/u2029/g, '\n');
+            continue;
+
+          case "BADCUE":
+            // BADCUE
+            // 54-62 - Collect and discard the remaining cue.
+            if (!line) {
+              self.state = "ID";
+            }
+
+            continue;
+        }
+      }
+    } catch (e) {
+      self.reportOrThrowError(e); // If we are currently parsing a cue, report what we have.
+
+      if (self.state === "CUETEXT" && self.cue && self.oncue) {
+        self.oncue(self.cue);
+      }
+
+      self.cue = null; // Enter BADWEBVTT state if header was not parsed correctly otherwise
+      // another exception occurred so enter BADCUE state.
+
+      self.state = self.state === "INITIAL" ? "BADWEBVTT" : "BADCUE";
+    }
+
+    return this;
+  };
+
+  Parser.prototype.flush = function () {
+    var self = this;
+
+    try {
+      // Finish decoding the stream.
+      self.buffer += self.decoder.decode(); // Synthesize the end of the current cue or region.
+
+      if (self.cue || self.state === "HEADER") {
+        self.buffer += "\n\n";
+        self.parse();
+      } // If we've flushed, parsed, and we're still on the INITIAL state then
+      // that means we don't have enough of the stream to parse the first
+      // line.
+
+
+      if (self.state === "INITIAL") {
+        throw new parsingError(parsingError.Errors.BadSignature);
+      }
+    } catch (e) {
+      self.reportOrThrowError(e);
+    }
+
+    self.onflush && self.onflush();
+    return this;
+  };
+
+  var parser = Parser;
 
   /**
    * Copyright 2013 vtt.js Contributors
@@ -10185,6 +10167,61 @@
    * See the License for the specific language governing permissions and
    * limitations under the License.
    */
+
+  /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+
+  /* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
+
+  function getDefault(module) {
+    return module["default"] || module;
+  }
+
+  function WebVTT() {} // Nothing
+  // Helper to allow strings to be decoded instead of the default binary utf8 data.
+
+
+  WebVTT.StringDecoder = function () {
+    return {
+      decode: function decode(data) {
+        if (!data) {
+          return "";
+        }
+
+        if (typeof data !== "string") {
+          throw new Error("Error - expected string data.");
+        }
+
+        return decodeURIComponent(encodeURIComponent(data));
+      }
+    };
+  };
+
+  WebVTT.convertCueToDOMTree = getDefault(convertCueToDomTree);
+  WebVTT.processCues = getDefault(processCues_1);
+  WebVTT.Parser = getDefault(parser);
+  var vtt = WebVTT;
+
+  /**
+   * Copyright 2013 vtt.js Contributors
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *   http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   */
+
+  function getDefault$1(module) {
+    return module["default"] || module;
+  }
+
+  var convertCueToDOMTree$1 = getDefault$1(convertCueToDomTree);
   var autoKeyword = "auto";
   var directionSetting = {
     "": 1,
@@ -10446,7 +10483,7 @@
 
   VTTCue.prototype.getCueAsHTML = function () {
     // Assume WebVTT.convertCueToDOMTree is on the global.
-    return WebVTT.convertCueToDOMTree(window, this.text);
+    return convertCueToDOMTree$1(window, this.text);
   };
 
   var vttcue = VTTCue;
@@ -30871,7 +30908,7 @@
    */
 
 
-  var Parser = /*#__PURE__*/function (_Stream) {
+  var Parser$1 = /*#__PURE__*/function (_Stream) {
     inheritsLoose(Parser, _Stream);
 
     function Parser() {
@@ -38292,7 +38329,7 @@
         customTagParsers = _ref$customTagParsers === void 0 ? [] : _ref$customTagParsers,
         _ref$customTagMappers = _ref.customTagMappers,
         customTagMappers = _ref$customTagMappers === void 0 ? [] : _ref$customTagMappers;
-    var parser = new Parser();
+    var parser = new Parser$1();
     customTagParsers.forEach(function (customParser) {
       return parser.addParser(customParser);
     });
@@ -51117,15 +51154,21 @@
   /**
    * Chooses the appropriate media playlist based on bandwidth and player size
    *
-   * @param {Object} master
+   * @param {Object} settings
+   *        Object of information required to use this selector
+   * @param {Object} settings.master
    *        Object representation of the master manifest
-   * @param {number} playerBandwidth
+   * @param {number} settings.bandwidth
    *        Current calculated bandwidth of the player
-   * @param {number} playerWidth
+   * @param {number} settings.playerWidth
    *        Current width of the player element (should account for the device pixel ratio)
-   * @param {number} playerHeight
+   * @param {number} settings.playerHeight
    *        Current height of the player element (should account for the device pixel ratio)
-   * @param {boolean} limitRenditionByPlayerDimensions
+   * @param {number} settings.playerObjectFit
+   *        Current value of the video element's object-fit CSS property. Allows taking into
+   *        account that the video might be scaled up to cover the media element when selecting
+   *        media playlists based on player size.
+   * @param {boolean} settings.limitRenditionByPlayerDimensions
    *        True if the player width and height should be used during the selection, false otherwise
    * @return {Playlist} the highest bitrate playlist less than the
    * currently detected bandwidth, accounting for some amount of
@@ -51133,8 +51176,14 @@
    */
 
 
-  var simpleSelector = function simpleSelector(master, playerBandwidth, playerWidth, playerHeight, limitRenditionByPlayerDimensions) {
-    // If we end up getting called before `master` is available, exit early
+  var simpleSelector = function simpleSelector(settings) {
+    var master = settings.master,
+        playerBandwidth = settings.bandwidth,
+        playerWidth = settings.playerWidth,
+        playerHeight = settings.playerHeight,
+        playerObjectFit = settings.playerObjectFit,
+        limitRenditionByPlayerDimensions = settings.limitRenditionByPlayerDimensions; // If we end up getting called before `master` is available, exit early
+
     if (!master) {
       return;
     }
@@ -51240,6 +51289,15 @@
 
     if (!resolutionBestRep) {
       resolutionPlusOneList = haveResolution.filter(function (rep) {
+        if (playerObjectFit === 'cover') {
+          // video will be scaled up to cover the player. We need to
+          // make sure rendition is at least as wide and as high as the
+          // player.
+          return rep.width > playerWidth && rep.height > playerHeight;
+        } // video will be scaled down to fit inside the player soon as
+        // its resolution exceeds player size in at least one dimension.
+
+
         return rep.width > playerWidth || rep.height > playerHeight;
       }); // find all the variants have the same smallest resolution
 
@@ -51292,7 +51350,14 @@
 
   var lastBandwidthSelector = function lastBandwidthSelector() {
     var pixelRatio = this.useDevicePixelRatio ? window_1$2.devicePixelRatio || 1 : 1;
-    return simpleSelector(this.playlists.master, this.systemBandwidth, parseInt(safeGetComputedStyle(this.tech_.el(), 'width'), 10) * pixelRatio, parseInt(safeGetComputedStyle(this.tech_.el(), 'height'), 10) * pixelRatio, this.limitRenditionByPlayerDimensions);
+    return simpleSelector({
+      master: this.playlists.master,
+      bandwidth: this.systemBandwidth,
+      playerWidth: parseInt(safeGetComputedStyle(this.tech_.el(), 'width'), 10) * pixelRatio,
+      playerHeight: parseInt(safeGetComputedStyle(this.tech_.el(), 'height'), 10) * pixelRatio,
+      playerObjectFit: safeGetComputedStyle(this.tech_.el(), 'objectFit'),
+      limitRenditionByPlayerDimensions: this.limitRenditionByPlayerDimensions
+    });
   };
   /**
    * Chooses the appropriate media playlist based on an
@@ -51325,7 +51390,14 @@
       }
 
       average = decay * this.systemBandwidth + (1 - decay) * average;
-      return simpleSelector(this.playlists.master, average, parseInt(safeGetComputedStyle(this.tech_.el(), 'width'), 10) * pixelRatio, parseInt(safeGetComputedStyle(this.tech_.el(), 'height'), 10) * pixelRatio, this.limitRenditionByPlayerDimensions);
+      return simpleSelector({
+        master: this.playlists.master,
+        bandwidth: average,
+        playerWidth: parseInt(safeGetComputedStyle(this.tech_.el(), 'width'), 10) * pixelRatio,
+        playerHeight: parseInt(safeGetComputedStyle(this.tech_.el(), 'height'), 10) * pixelRatio,
+        playerObjectFit: safeGetComputedStyle(this.tech_.el(), 'objectFit'),
+        limitRenditionByPlayerDimensions: this.limitRenditionByPlayerDimensions
+      });
     };
   };
   /**
