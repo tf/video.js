@@ -1438,8 +1438,7 @@
    */
 
   var autoSetup = function autoSetup() {
-    // Protect against breakage in non-browser environments and check global autoSetup option.
-    if (!isReal() || videojs.options.autoSetup === false) {
+    if (videojs.options.autoSetup === false) {
       return;
     }
 
@@ -1487,6 +1486,11 @@
 
 
   function autoSetupTimeout(wait, vjs) {
+    // Protect against breakage in non-browser environments
+    if (!isReal()) {
+      return;
+    }
+
     if (vjs) {
       videojs = vjs;
     }
