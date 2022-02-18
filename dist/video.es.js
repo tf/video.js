@@ -24322,7 +24322,7 @@ var Player = /*#__PURE__*/function (_Component) {
     return foundSourceAndTech || false;
   }
   /**
-   * Get or set the video source.
+   * Executes source setting and getting logic
    *
    * @param {Tech~SourceObject|Tech~SourceObject[]|string} [source]
    *        A SourceObject, an array of SourceObjects, or a string referencing
@@ -24331,6 +24331,8 @@ var Player = /*#__PURE__*/function (_Component) {
    *        algorithms can take the `type` into account.
    *
    *        If not provided, this method acts as a getter.
+   * @param {boolean} isRetry
+   *        Indicates whether this is being called internally as a result of a retry
    *
    * @return {string|undefined}
    *         If the `source` argument is missing, returns the current source
@@ -24338,12 +24340,17 @@ var Player = /*#__PURE__*/function (_Component) {
    */
   ;
 
-  _proto.src = function src(source) {
+  _proto.handleSrc_ = function handleSrc_(source, isRetry) {
     var _this14 = this;
 
     // getter usage
     if (typeof source === 'undefined') {
       return this.cache_.src || '';
+    } // Reset retry behavior for new source
+
+
+    if (this.resetRetryOnError_) {
+      this.resetRetryOnError_();
     } // filter out invalid sources and turn our source into
     // an array of source objects
 
@@ -24363,15 +24370,22 @@ var Player = /*#__PURE__*/function (_Component) {
     } // initial sources
 
 
-    this.changingSrc_ = true;
-    this.cache_.sources = sources;
+    this.changingSrc_ = true; // Only update the cached source list if we are not retrying a new source after error,
+    // since in that case we want to include the failed source(s) in the cache
+
+    if (!isRetry) {
+      this.cache_.sources = sources;
+    }
+
     this.updateSourceCaches_(sources[0]); // middlewareSource is the source after it has been changed by middleware
 
     setSource(this, sources[0], function (middlewareSource, mws) {
       _this14.middleware_ = mws; // since sourceSet is async we have to update the cache again after we select a source since
       // the source that is selected could be out of order from the cache update above this callback.
 
-      _this14.cache_.sources = sources;
+      if (!isRetry) {
+        _this14.cache_.sources = sources;
+      }
 
       _this14.updateSourceCaches_(middlewareSource);
 
@@ -24379,7 +24393,7 @@ var Player = /*#__PURE__*/function (_Component) {
 
       if (err) {
         if (sources.length > 1) {
-          return _this14.src(sources.slice(1));
+          return _this14.handleSrc_(sources.slice(1));
         }
 
         _this14.changingSrc_ = false; // We need to wrap this in a timeout to give folks a chance to add error event handlers
@@ -24399,7 +24413,49 @@ var Player = /*#__PURE__*/function (_Component) {
       }
 
       setTech(mws, _this14.tech_);
-    });
+    }); // Try another available source if this one fails before playback.
+
+    if (this.options_.retryOnError && sources.length > 1) {
+      var retry = function retry() {
+        // Remove the error modal
+        _this14.error(null);
+
+        _this14.handleSrc_(sources.slice(1), true);
+      };
+
+      var stopListeningForErrors = function stopListeningForErrors() {
+        _this14.off('error', retry);
+      };
+
+      this.one('error', retry);
+      this.one('playing', stopListeningForErrors);
+
+      this.resetRetryOnError_ = function () {
+        _this14.off('error', retry);
+
+        _this14.off('playing', stopListeningForErrors);
+      };
+    }
+  }
+  /**
+   * Get or set the video source.
+   *
+   * @param {Tech~SourceObject|Tech~SourceObject[]|string} [source]
+   *        A SourceObject, an array of SourceObjects, or a string referencing
+   *        a URL to a media source. It is _highly recommended_ that an object
+   *        or array of objects is used here, so that source selection
+   *        algorithms can take the `type` into account.
+   *
+   *        If not provided, this method acts as a getter.
+   *
+   * @return {string|undefined}
+   *         If the `source` argument is missing, returns the current source
+   *         URL. Otherwise, returns nothing/undefined.
+   */
+  ;
+
+  _proto.src = function src(source) {
+    return this.handleSrc_(source, false);
   }
   /**
    * Set the source object on the tech, returns a boolean that indicates whether
